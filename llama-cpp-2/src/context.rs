@@ -98,6 +98,16 @@ impl<'model> LlamaContext<'model> {
     /// # Panics
     ///
     /// - the returned [`std::ffi::c_int`] from llama-cpp does not fit into a i32 (this should never happen on most systems)
+    /// Block until every operation queued on this context has completed.
+    ///
+    /// `decode` enqueues work on backends that run asynchronously (Metal, CUDA)
+    /// and returns before it finishes; the cost then lands on whatever reads an
+    /// output next. Timing a decode without this attributes its cost to the
+    /// wrong caller.
+    pub fn synchronize(&mut self) {
+        unsafe { llama_cpp_sys_2::llama_synchronize(self.context.as_ptr()) }
+    }
+
     pub fn decode(&mut self, batch: &mut LlamaBatch) -> Result<(), DecodeError> {
         let result =
             unsafe { llama_cpp_sys_2::llama_decode(self.context.as_ptr(), batch.llama_batch) };
