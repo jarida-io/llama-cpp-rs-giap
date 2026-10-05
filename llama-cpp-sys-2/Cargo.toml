@@ -100,6 +100,10 @@ vulkan = []
 name = "llama_cpp_sys_2"
 path = "src/lib.rs"
 
+[[test]]
+name = "graph_reservation_failure"
+path = "tests/graph_reservation_failure.rs"
+
 [dependencies]
 
 [build-dependencies.bindgen]
