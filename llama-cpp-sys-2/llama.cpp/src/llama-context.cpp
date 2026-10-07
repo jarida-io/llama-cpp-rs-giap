@@ -1361,12 +1361,17 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, ll
 
         if (!gf) {
             LLAMA_LOG_ERROR("%s: failed to initialize graph\n", __func__);
+            // building recorded the params; forget them so the next ubatch rebuilds
+            res->reset();
             ret = GGML_STATUS_FAILED;
             return nullptr;
         }
 
         if (!ggml_backend_sched_alloc_graph(sched.get(), gf)) {
             LLAMA_LOG_ERROR("%s: failed to allocate graph\n", __func__);
+            // the graph was built but never allocated: forget it, or the next ubatch of the same
+            // shape passes can_reuse and sets inputs on tensors that have no buffer
+            res->reset();
             ret = GGML_STATUS_ALLOC_FAILED;
             return nullptr;
         }
