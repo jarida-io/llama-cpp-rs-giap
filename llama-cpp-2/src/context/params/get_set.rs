@@ -99,6 +99,41 @@ impl LlamaContextParams {
         self.context_params.n_ubatch
     }
 
+    /// Set the most outputs (rows of logits) one ubatch may request; `0` means `n_batch`.
+    ///
+    /// The compute graph reserves logits for `min(n_ubatch, n_outputs_max)` outputs up front, a
+    /// `n_vocab`-wide row of f32 each: for a 262,144-token vocabulary that is 1 MiB per ubatch
+    /// token. A caller that only ever asks for the last token's logits can set this to 1 and run a
+    /// large `n_ubatch` without paying for it. A decode asking for more outputs than this aborts.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default()
+    ///     .with_n_outputs_max(1);
+    /// assert_eq!(params.n_outputs_max(), 1);
+    /// ```
+    #[must_use]
+    pub fn with_n_outputs_max(mut self, n_outputs_max: u32) -> Self {
+        self.context_params.n_outputs_max = n_outputs_max;
+        self
+    }
+
+    /// Get the `n_outputs_max`
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default();
+    /// assert_eq!(params.n_outputs_max(), 0);
+    /// ```
+    #[must_use]
+    pub fn n_outputs_max(&self) -> u32 {
+        self.context_params.n_outputs_max
+    }
+
     /// Set the max number of sequences (i.e. distinct states for recurrent models)
     ///
     /// # Examples
