@@ -605,6 +605,15 @@ static __global__ void mul_mat_vec_q(
     const block_q8_1 * y = ((const block_q8_1 *) vy) + sample_y*stride_sample_y + channel_y*stride_channel_y;
     const int kbx_offset = sample_x*stride_sample_x + channel_x*stride_channel_x + row0*stride_row_x;
 
+    // A block that takes several rows reads the last valid row again past the end of the matrix;
+    // the write-back skips those rows. Clamping here keeps the loads in the K loop unconditional.
+    int row_offset[rows_per_cuda_block];
+#pragma unroll
+    for (int i = 0; i < rows_per_cuda_block; ++i) {
+        const int row = rows_per_cuda_block == 1 || uint32_t(row0 + i) < stride_col_dst ? i : int(stride_col_dst) - 1 - row0;
+        row_offset[i] = row*stride_row_x;
+    }
+
     for (int kbx = tid / (qi/vdr); kbx < blocks_per_row_x; kbx += blocks_per_iter) {
         const int kby = kbx * (qk/QK8_1); // y block index that aligns with kbx
 
@@ -615,15 +624,12 @@ static __global__ void mul_mat_vec_q(
         for (int j = 0; j < ncols_dst; ++j) {
 #pragma unroll
             for (int i = 0; i < rows_per_cuda_block; ++i) {
-                if (rows_per_cuda_block > 1 && uint32_t(row0 + i) >= stride_col_dst) {
-                    continue;
-                }
                 tmp[j][i] += vec_dot_q_cuda(
-                    vx, &y[j*stride_col_y + kby], kbx_offset + i*stride_row_x + kbx, kqs);
+                    vx, &y[j*stride_col_y + kby], kbx_offset + row_offset[i] + kbx, kqs);
                 if constexpr (has_fusion) {
                     if (use_gate) {
                         tmp_gate[j][i] += vec_dot_q_cuda(
-                            vgate, &y[j*stride_col_y + kby], kbx_offset + i*stride_row_x + kbx, kqs);
+                            vgate, &y[j*stride_col_y + kby], kbx_offset + row_offset[i] + kbx, kqs);
                     }
                 }
             }
