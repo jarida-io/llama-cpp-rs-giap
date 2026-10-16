@@ -96,6 +96,7 @@ static constexpr __host__ __device__ int get_vdr_mmvq(ggml_type type) {
 enum mmvq_parameter_table_id {
     MMVQ_PARAMETERS_GENERIC = 0,
     MMVQ_PARAMETERS_TURING,
+    MMVQ_PARAMETERS_ORIN,
     MMVQ_PARAMETERS_GCN,
     MMVQ_PARAMETERS_RDNA2,
     MMVQ_PARAMETERS_RDNA3_0,
@@ -116,6 +117,8 @@ static constexpr __device__ mmvq_parameter_table_id get_device_table_id() {
     return MMVQ_PARAMETERS_TURING;
 #elif __CUDA_ARCH__ == GGML_CUDA_CC_DGX_SPARK
     return MMVQ_PARAMETERS_GB10;
+#elif defined(__CUDA_ARCH__) && __CUDA_ARCH__ == GGML_CUDA_CC_ORIN
+    return MMVQ_PARAMETERS_ORIN;
 #else
     return MMVQ_PARAMETERS_GENERIC;
 #endif
@@ -139,6 +142,9 @@ static __host__ mmvq_parameter_table_id get_device_table_id(int cc) {
     }
     if (GGML_CUDA_CC_IS_NVIDIA(cc) && ggml_cuda_highest_compiled_arch(cc) == GGML_CUDA_CC_DGX_SPARK) {
         return MMVQ_PARAMETERS_GB10;
+    }
+    if (GGML_CUDA_CC_IS_NVIDIA(cc) && ggml_cuda_highest_compiled_arch(cc) == GGML_CUDA_CC_ORIN) {
+        return MMVQ_PARAMETERS_ORIN;
     }
     return MMVQ_PARAMETERS_GENERIC;
 }
@@ -450,6 +456,11 @@ static constexpr __device__ int get_mmvq_mmid_max_batch_for_device() {
 }
 
 static constexpr __host__ __device__ int calc_nwarps(ggml_type type, int ncols_dst, mmvq_parameter_table_id table_id, bool small_k = false, bool halve_iters = false) {
+    // Orin Nano 8GB, Gemma 4 E4B Q4_0: small blocks that each take 4 rows reuse the activations
+    // across rows. Batch 1 19.9 -> 28.8 tok/s with gate/up unfused; MTP verify batch 5 73 -> 94.
+    if (table_id == MMVQ_PARAMETERS_ORIN) {
+        return ncols_dst <= 3 ? 2 : 1;
+    }
     if (table_id == MMVQ_PARAMETERS_GENERIC) {
         switch (ncols_dst) {
             case 1:
@@ -577,6 +588,9 @@ static constexpr __host__ __device__ int calc_nwarps(ggml_type type, int ncols_d
 }
 
 static constexpr __host__ __device__ int calc_rows_per_block(int ncols_dst, int table_id, bool small_k = false, int nwarps = 1) {
+    if (table_id == MMVQ_PARAMETERS_ORIN) {
+        return ncols_dst <= 8 ? 4 : 1;
+    }
     if (table_id == MMVQ_PARAMETERS_GENERIC || table_id == MMVQ_PARAMETERS_GCN || table_id == MMVQ_PARAMETERS_TURING || table_id == MMVQ_PARAMETERS_GB10) {
         switch (ncols_dst) {
             case 1:
@@ -748,6 +762,9 @@ static __global__ void mul_mat_vec_q(
         for (int j = 0; j < ncols_dst; ++j) {
 #pragma unroll
             for (int i = 0; i < rows_per_cuda_block; ++i) {
+                if (rows_per_cuda_block > 1 && uint32_t(row0 + i) >= stride_col_dst) {
+                    continue;
+                }
                 tmp[j][i] += vec_dot_q_cuda(
                     vx, &y[j*stride_col_y + kby], kbx_offset + i*stride_row_x + kbx, kqs);
                 if constexpr (has_fusion) {
@@ -1117,6 +1134,10 @@ static void mul_mat_vec_q_switch_ncols_dst(
     const int     blocks_per_iter_1warp = vdr * warp_size / qi;
 
     const auto should_use_small_k = [&](int c_ncols_dst) {
+        // The Orin table's rows and warps were measured without small_k; keep them as measured.
+        if (table_id == MMVQ_PARAMETERS_ORIN) {
+            return false;
+        }
         // When K is small, increase rows_per_block to match nwarps so each warp has more work to do
         // Trigger when the full thread block covers all K blocks in a single loop iteration and few threads remain idle.
         const int  nwarps = calc_nwarps(type, c_ncols_dst, table_id);
