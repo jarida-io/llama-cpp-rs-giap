@@ -1666,6 +1666,13 @@ static bool ggml_cuda_should_fuse_mul_mat(const ggml_tensor * ffn_up,
                                           const ggml_tensor * ffn_gate_bias = nullptr,
                                           const ggml_tensor * ffn_up_scale = nullptr,
                                           const ggml_tensor * ffn_gate_scale = nullptr) {
+    // Orin: two tuned quantized mat-vecs plus the GLU beat the fused gate/up kernel at batch 1,
+    // 28.8 vs 25.4 tok/s on Gemma 4 E4B Q4_0 (Orin Nano 8GB).
+    const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
+    if (GGML_CUDA_CC_IS_NVIDIA(cc) && cc == GGML_CUDA_CC_ORIN && ggml_is_quantized(ffn_up->src[0]->type)) {
+        return false;
+    }
+
     const bool has_bias = ffn_up_bias != nullptr || ffn_gate_bias != nullptr;
     const bool has_scale = ffn_up_scale != nullptr || ffn_gate_scale != nullptr;
 
