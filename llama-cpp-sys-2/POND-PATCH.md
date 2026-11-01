@@ -22,7 +22,7 @@ is written against, so the four commits below are applied to these August source
 
 | Commit | Change | Here |
 |---|---|---|
-| `4fbc76dec5` (#30054) | The `gemma-embedding2` architecture | Unchanged; the converter and test hunks are outside the vendored tree |
+| `4fbc76dec5` (#30054) | The `gemma-embedding2` architecture | Its `load_swa_pattern` and `build_inp_embd(tok_embd, scale)` postdate these sources, so the model inlines the first and scales token embeddings as `gemma-embedding.cpp` does; the converter and test hunks are outside the vendored tree |
 | `358a420ec4` (#30416) | The no-cache attention pads its KV dimension to 256 | Calls this tree's `build_attn_mha`, which has no `n_kv_tail` argument; without the `clef` model, which postdates it |
 | `ed019cd8b9` (#30255) | No logits buffer when the reserved graph has no logits | Unchanged |
 | `cb55ffe6e2` (#30445) | `build_logits()` adds the LM head centrally, and leaves it out of pooled embeddings | Without twelve models that postdate these sources; the `gemma4`, `eagle3`, `qwen3` and `lfm2` hunks applied by hand at their older offsets |
