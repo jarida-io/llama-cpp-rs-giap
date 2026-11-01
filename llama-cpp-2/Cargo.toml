@@ -12,8 +12,8 @@
 [package]
 edition = "2021"
 name = "llama-cpp-2"
-version = "0.1.156"
-build = "build.rs"
+version = "0.1.160"
+build = false
 autolib = false
 autobins = false
 autoexamples = false
@@ -59,6 +59,7 @@ static-stdcxx = ["llama-cpp-sys-2/static-stdcxx"]
 system-ggml = ["llama-cpp-sys-2/system-ggml"]
 system-ggml-static = ["llama-cpp-sys-2/system-ggml-static"]
 vulkan = ["llama-cpp-sys-2/vulkan"]
+webgpu = ["llama-cpp-sys-2/webgpu"]
 
 [lib]
 name = "llama_cpp_2"
@@ -68,14 +69,11 @@ path = "src/lib.rs"
 name = "grammar_without_common"
 path = "tests/grammar_without_common.rs"
 
-[dependencies.encoding_rs]
-version = "0.8.35"
-
 [dependencies.enumflags2]
 version = "0.7.12"
 
 [dependencies.llama-cpp-sys-2]
-version = "0.1.156"
+version = "0.1.160"
 
 [dependencies.llguidance]
 version = "1.7.5"
@@ -97,12 +95,15 @@ version = "0.1"
 [dev-dependencies.encoding_rs]
 version = "0.8.35"
 
+[dev-dependencies.static_assertions]
+version = "1.1.0"
+
 [dev-dependencies.tracing-subscriber]
 version = "0.3"
 features = ["json"]
 
 [target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies.llama-cpp-sys-2]
-version = "0.1.156"
+version = "0.1.160"
 features = ["metal"]
 
 [lints.clippy.pedantic]
