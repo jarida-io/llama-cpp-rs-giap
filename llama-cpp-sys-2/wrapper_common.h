@@ -7,6 +7,27 @@
 
 struct llama_model;
 struct llama_sampler;
+struct llama_rs_grammar_trigger {
+    int type;
+    char * value;
+    llama_token token;
+};
+
+struct llama_rs_chat_template_result {
+    char * prompt;
+    char * grammar;
+    char * parser;
+    char * generation_prompt;
+    int chat_format;
+    bool grammar_lazy;
+    struct llama_rs_grammar_trigger * grammar_triggers;
+    size_t grammar_triggers_count;
+    char ** preserved_tokens;
+    size_t preserved_tokens_count;
+    char ** additional_stops;
+    size_t additional_stops_count;
+};
+
 struct llama_rs_mtp_speculative;
 struct llama_vocab;
 
@@ -92,6 +113,9 @@ llama_rs_status llama_rs_mtp_speculative_draft(
 llama_rs_status llama_rs_mtp_speculative_accept(
     struct llama_rs_mtp_speculative * spec,
     uint16_t n_accepted);
+
+
+void llama_rs_chat_template_result_free(struct llama_rs_chat_template_result * result);
 
 void llama_rs_string_free(char * ptr);
 

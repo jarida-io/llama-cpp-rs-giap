@@ -74,6 +74,7 @@ version = "0.7.12"
 
 [dependencies.llama-cpp-sys-2]
 version = "0.1.160"
+path = "../llama-cpp-sys-2"
 
 [dependencies.llguidance]
 version = "1.7.5"
@@ -104,6 +105,7 @@ features = ["json"]
 
 [target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies.llama-cpp-sys-2]
 version = "0.1.160"
+path = "../llama-cpp-sys-2"
 features = ["metal"]
 
 [lints.clippy.pedantic]

@@ -26,4 +26,5 @@ static inline char * llama_rs_dup_string(const std::string & value) {
     return buffer;
 }
 
+
 #endif

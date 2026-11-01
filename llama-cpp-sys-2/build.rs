@@ -708,6 +708,8 @@ fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rerun-if-changed=wrapper_common.h");
     println!("cargo:rerun-if-changed=wrapper_common.cpp");
+    println!("cargo:rerun-if-changed=wrapper_oai.h");
+    println!("cargo:rerun-if-changed=wrapper_oai.cpp");
     println!("cargo:rerun-if-changed=wrapper_utils.h");
     println!("cargo:rerun-if-changed=wrapper_mtmd.h");
 
@@ -718,6 +720,7 @@ fn main() {
         common_wrapper_build
             .cpp(true)
             .file("wrapper_common.cpp")
+            .file("wrapper_oai.cpp")
             .include(&llama_src)
             .include(llama_src.join("common"))
             .include(llama_src.join("include"))

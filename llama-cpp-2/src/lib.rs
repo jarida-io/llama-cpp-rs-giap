@@ -32,6 +32,7 @@ pub mod llama_batch;
 pub(crate) mod llguidance_sampler;
 mod log;
 pub mod model;
+pub mod openai;
 #[cfg(feature = "mtmd")]
 pub mod mtmd;
 mod ptr;
@@ -394,6 +395,9 @@ pub enum ApplyChatTemplateError {
     /// llama.cpp returned an error code.
     #[error("ffi error {0}")]
     FfiError(i32),
+    /// invalid grammar trigger data returned by llama.cpp.
+    #[error("invalid grammar trigger data")]
+    InvalidGrammarTriggerType,
 }
 
 /// Failed to accept a token in a sampler.
@@ -626,4 +630,21 @@ pub fn send_logs_to_tracing(options: LogOptions) {
         // GGML has to be set after llama since setting llama logs sets ggml logs as well.
         llama_cpp_sys_2::ggml_log_set(Some(logs_to_trace), ggml_heap_state as *mut _);
     }
+}
+
+/// Failed to parse a chat response.
+#[derive(Debug, thiserror::Error)]
+pub enum ChatParseError {
+    /// the string contained a null byte and thus could not be converted to a c string.
+    #[error("{0}")]
+    NulError(#[from] NulError),
+    /// the string could not be converted to utf8.
+    #[error("{0}")]
+    Utf8Error(#[from] FromUtf8Error),
+    /// llama.cpp returned a null pointer for the parse result.
+    #[error("null result from llama.cpp")]
+    NullResult,
+    /// llama.cpp returned an error code.
+    #[error("ffi error {0}")]
+    FfiError(i32),
 }
