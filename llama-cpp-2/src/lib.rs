@@ -353,6 +353,9 @@ pub fn json_schema_to_grammar(schema_json: &str) -> Result<String> {
 #[cfg(all(test, feature = "common"))]
 mod tests {
     use super::json_schema_to_grammar;
+    use crate::model::ChatTemplateResult;
+    use std::ffi::{CStr, CString};
+    use std::ptr;
 
     #[test]
     fn json_schema_string_api_returns_grammar() {
@@ -369,6 +372,118 @@ mod tests {
             json_schema_to_grammar(schema).expect("string-based schema conversion should succeed");
 
         assert!(grammar.contains("root ::="));
+    }
+
+    #[test]
+    fn gemma4_peg_parser_roundtrips_reasoning_and_tool_calls() {
+        // Minimal Gemma 4 template containing '<|tool_call>call:' to trigger common_chat_params_init_gemma4
+        let gemma4_tmpl = CString::new(
+            r#"{#- OpenAI Chat Completions: -#}{% for m in messages %}<|turn>{{ m.role }}
+{{ m.content }}<turn|>
+{% endfor %}{% if add_generation_prompt %}<|turn>model
+<|channel>thought
+{% endif %}{# '<|tool_call>call:' #}"#,
+        )
+        .unwrap();
+        let messages = CString::new(r#"[{"role":"user","content":"Weather in Nairobi?"}]"#).unwrap();
+        let tools = CString::new(
+            r#"[{"type":"function","function":{"name":"get_weather","description":"Get weather","parameters":{"type":"object","properties":{"location":{"type":"string"}},"required":["location"]}}}]"#,
+        )
+        .unwrap();
+        let reasoning_format = CString::new("auto").unwrap();
+
+        let ffi_params = llama_cpp_sys_2::llama_rs_chat_template_oaicompat_params {
+            messages: messages.as_ptr(),
+            tools: tools.as_ptr(),
+            tool_choice: ptr::null(),
+            json_schema: ptr::null(),
+            grammar: ptr::null(),
+            reasoning_format: reasoning_format.as_ptr(),
+            chat_template_kwargs: ptr::null(),
+            add_generation_prompt: true,
+            use_jinja: true,
+            parallel_tool_calls: false,
+            enable_thinking: true,
+            add_bos: false,
+            add_eos: false,
+        };
+        let mut raw_result = llama_cpp_sys_2::llama_rs_chat_template_result {
+            prompt: ptr::null_mut(),
+            grammar: ptr::null_mut(),
+            parser: ptr::null_mut(),
+            generation_prompt: ptr::null_mut(),
+            chat_format: 0,
+            grammar_lazy: false,
+            grammar_triggers: ptr::null_mut(),
+            grammar_triggers_count: 0,
+            preserved_tokens: ptr::null_mut(),
+            preserved_tokens_count: 0,
+            additional_stops: ptr::null_mut(),
+            additional_stops_count: 0,
+        };
+
+        let rc = unsafe {
+            llama_cpp_sys_2::llama_rs_apply_chat_template_oaicompat(
+                ptr::null(),
+                gemma4_tmpl.as_ptr(),
+                &ffi_params,
+                &mut raw_result,
+            )
+        };
+        assert_eq!(rc, llama_cpp_sys_2::LLAMA_RS_STATUS_OK);
+        let parser_str = unsafe { CStr::from_ptr(raw_result.parser) }
+            .to_str()
+            .unwrap()
+            .to_string();
+        let gen_prompt = unsafe { CStr::from_ptr(raw_result.generation_prompt) }
+            .to_str()
+            .unwrap()
+            .to_string();
+        let chat_format = raw_result.chat_format;
+        unsafe { llama_cpp_sys_2::llama_rs_chat_template_result_free(&mut raw_result) };
+
+        assert!(parser_str.starts_with('{'), "parser should be serialized JSON");
+        assert_eq!(gen_prompt, "<|turn>model\n<|channel>thought\n");
+
+        let tmpl_res = ChatTemplateResult {
+            prompt: String::new(),
+            grammar: None,
+            grammar_lazy: true,
+            grammar_triggers: Vec::new(),
+            preserved_tokens: Vec::new(),
+            additional_stops: Vec::new(),
+            chat_format,
+            parser: Some(parser_str),
+            generation_prompt: gen_prompt.clone(),
+            parse_tool_calls: true,
+        };
+
+        let mut stream = tmpl_res.streaming_state_oaicompat().unwrap();
+        // Calling update with generation_prompt (as inference_native_tools.rs does) must not double it
+        let _ = stream.update(&gen_prompt, true).unwrap();
+
+        let d1 = stream.update("Thinking about Nairobi weather.", true).unwrap();
+        let d2 = stream
+            .update(
+                "<channel|><|tool_call>call:get_weather{location:<|\"|>Nairobi<|\"|>}<tool_call|>",
+                false,
+            )
+            .unwrap();
+
+        let all_deltas: Vec<String> = d1.into_iter().chain(d2).collect();
+        let joined = all_deltas.join("\n");
+        assert!(
+            joined.contains("\"reasoning_content\":\"Thinking about Nairobi weather.\""),
+            "expected reasoning_content delta, got: {joined}"
+        );
+        assert!(
+            !joined.contains("\"content\":\"Thinking"),
+            "reasoning leaked into content delta: {joined}"
+        );
+        assert!(
+            joined.contains("\"name\":\"get_weather\""),
+            "expected tool_calls delta, got: {joined}"
+        );
     }
 }
 

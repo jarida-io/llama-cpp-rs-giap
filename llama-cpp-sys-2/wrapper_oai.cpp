@@ -405,7 +405,7 @@ extern "C" llama_rs_status llama_rs_apply_chat_template_with_tools_oaicompat(
             out_result->grammar = llama_rs_dup_string(params.grammar);
         }
         if (!params.parser.empty() && params.parser.root() != COMMON_PEG_INVALID_PARSER_ID) {
-            out_result->parser = llama_rs_dup_string(params.parser.dump(params.parser.root()));
+            out_result->parser = llama_rs_dup_string(params.parser.save());
         }
         if (!params.generation_prompt.empty()) {
             out_result->generation_prompt = llama_rs_dup_string(params.generation_prompt);
@@ -515,7 +515,7 @@ extern "C" llama_rs_status llama_rs_apply_chat_template_oaicompat(
             out_result->grammar = llama_rs_dup_string(params_out.grammar);
         }
         if (!params_out.parser.empty() && params_out.parser.root() != COMMON_PEG_INVALID_PARSER_ID) {
-            out_result->parser = llama_rs_dup_string(params_out.parser.dump(params_out.parser.root()));
+            out_result->parser = llama_rs_dup_string(params_out.parser.save());
         }
         if (!params_out.generation_prompt.empty()) {
             out_result->generation_prompt = llama_rs_dup_string(params_out.generation_prompt);
@@ -573,11 +573,13 @@ extern "C" llama_rs_status llama_rs_chat_parse_to_oaicompat(
 
     try {
         (void) parse_tool_calls;
-        (void) parser_data;
         common_chat_parser_params syntax;
         syntax.format = static_cast<common_chat_format>(chat_format);
         if (generation_prompt && std::strlen(generation_prompt) > 0) {
             syntax.generation_prompt = common_chat_input(generation_prompt);
+        }
+        if (parser_data && std::strlen(parser_data) > 0) {
+            syntax.parser.load(parser_data);
         }
 
         auto msg = common_chat_parse(common_chat_input(input), is_partial, syntax);
@@ -653,11 +655,13 @@ extern "C" struct llama_rs_chat_parse_state_oaicompat * llama_rs_chat_parse_stat
     const char * generation_prompt) {
     try {
         (void) parse_tool_calls;
-        (void) parser_data;
         common_chat_parser_params syntax;
         syntax.format = static_cast<common_chat_format>(chat_format);
         if (generation_prompt && std::strlen(generation_prompt) > 0) {
             syntax.generation_prompt = common_chat_input(generation_prompt);
+        }
+        if (parser_data && std::strlen(parser_data) > 0) {
+            syntax.parser.load(parser_data);
         }
         return new llama_rs_chat_parse_state_oaicompat(std::move(syntax));
     } catch (const std::exception &) {
@@ -681,7 +685,11 @@ extern "C" llama_rs_status llama_rs_chat_parse_state_update_oaicompat(
 
     try {
         if (text_added && text_added[0] != '\0') {
-            state->generated_text += text_added;
+            if (state->generated_text.empty() && text_added == state->syntax.generation_prompt.text) {
+                // `syntax.generation_prompt` is already prepended inside `common_chat_parse`.
+            } else {
+                state->generated_text += text_added;
+            }
         }
         auto msg_prv_copy = state->chat_msg;
         auto new_msg = common_chat_parse(common_chat_input(state->generated_text), is_partial, state->syntax);
