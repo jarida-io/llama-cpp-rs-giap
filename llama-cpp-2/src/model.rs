@@ -537,6 +537,9 @@ impl LlamaModel {
         ctx_other: &LlamaContext<'_>,
     ) -> Result<LlamaContext<'a>, LlamaContextLoadError> {
         let mut context_params = params.context_params;
+        if context_params.ctx_type == llama_cpp_sys_2::LLAMA_CONTEXT_TYPE_DEFAULT {
+            context_params.ctx_type = llama_cpp_sys_2::LLAMA_CONTEXT_TYPE_MTP;
+        }
         // FIXME(madsmtm): Use `.as_ptr()` after:
         // https://github.com/ggml-org/llama.cpp/pull/28316
         context_params.ctx_other = unsafe { ctx_other.context.as_mut_ptr_unsound() };
