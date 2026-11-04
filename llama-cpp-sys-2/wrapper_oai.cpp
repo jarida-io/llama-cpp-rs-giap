@@ -393,7 +393,7 @@ extern "C" llama_rs_status llama_rs_apply_chat_template_with_tools_oaicompat(
         }
 
         if (tools_json && std::strlen(tools_json) > 0) {
-            inputs.tools = common_chat_tools_parse_oaicompat(json::parse(tools_json));
+            inputs.tools = common_chat_tools_parse_oaicompat(common_json::parse(tools_json));
         }
         if (json_schema && std::strlen(json_schema) > 0) {
             inputs.json_schema = json_schema;
@@ -404,8 +404,8 @@ extern "C" llama_rs_status llama_rs_apply_chat_template_with_tools_oaicompat(
         if (!params.grammar.empty()) {
             out_result->grammar = llama_rs_dup_string(params.grammar);
         }
-        if (!params.parser.empty()) {
-            out_result->parser = llama_rs_dup_string(params.parser);
+        if (!params.parser.empty() && params.parser.root() != COMMON_PEG_INVALID_PARSER_ID) {
+            out_result->parser = llama_rs_dup_string(params.parser.dump(params.parser.root()));
         }
         if (!params.generation_prompt.empty()) {
             out_result->generation_prompt = llama_rs_dup_string(params.generation_prompt);
@@ -483,9 +483,9 @@ extern "C" llama_rs_status llama_rs_apply_chat_template_oaicompat(
         inputs.add_bos = params->add_bos;
         inputs.add_eos = params->add_eos;
 
-        inputs.messages = common_chat_msgs_parse_oaicompat(json::parse(params->messages));
+        inputs.messages = common_chat_msgs_parse_oaicompat(common_json::parse(params->messages));
         if (params->tools && std::strlen(params->tools) > 0) {
-            inputs.tools = common_chat_tools_parse_oaicompat(json::parse(params->tools));
+            inputs.tools = common_chat_tools_parse_oaicompat(common_json::parse(params->tools));
         }
         if (params->tool_choice && std::strlen(params->tool_choice) > 0) {
             inputs.tool_choice = common_chat_tool_choice_parse_oaicompat(params->tool_choice);
@@ -514,8 +514,8 @@ extern "C" llama_rs_status llama_rs_apply_chat_template_oaicompat(
         if (!params_out.grammar.empty()) {
             out_result->grammar = llama_rs_dup_string(params_out.grammar);
         }
-        if (!params_out.parser.empty()) {
-            out_result->parser = llama_rs_dup_string(params_out.parser);
+        if (!params_out.parser.empty() && params_out.parser.root() != COMMON_PEG_INVALID_PARSER_ID) {
+            out_result->parser = llama_rs_dup_string(params_out.parser.dump(params_out.parser.root()));
         }
         if (!params_out.generation_prompt.empty()) {
             out_result->generation_prompt = llama_rs_dup_string(params_out.generation_prompt);
@@ -572,17 +572,15 @@ extern "C" llama_rs_status llama_rs_chat_parse_to_oaicompat(
     *out_json = nullptr;
 
     try {
+        (void) parse_tool_calls;
+        (void) parser_data;
         common_chat_parser_params syntax;
         syntax.format = static_cast<common_chat_format>(chat_format);
-        syntax.parse_tool_calls = parse_tool_calls;
         if (generation_prompt && std::strlen(generation_prompt) > 0) {
-            syntax.generation_prompt = generation_prompt;
-        }
-        if (parser_data && std::strlen(parser_data) > 0) {
-            syntax.parser.load(parser_data);
+            syntax.generation_prompt = common_chat_input(generation_prompt);
         }
 
-        auto msg = common_chat_parse(input, is_partial, syntax);
+        auto msg = common_chat_parse(common_chat_input(input), is_partial, syntax);
         std::vector<std::string> ids_cache;
         msg.set_tool_call_ids(ids_cache, []() { return random_string(); });
         auto json_msg = msg.to_json_oaicompat().dump();
@@ -654,14 +652,12 @@ extern "C" struct llama_rs_chat_parse_state_oaicompat * llama_rs_chat_parse_stat
     const char * parser_data,
     const char * generation_prompt) {
     try {
+        (void) parse_tool_calls;
+        (void) parser_data;
         common_chat_parser_params syntax;
         syntax.format = static_cast<common_chat_format>(chat_format);
-        syntax.parse_tool_calls = parse_tool_calls;
         if (generation_prompt && std::strlen(generation_prompt) > 0) {
-            syntax.generation_prompt = generation_prompt;
-        }
-        if (parser_data && std::strlen(parser_data) > 0) {
-            syntax.parser.load(parser_data);
+            syntax.generation_prompt = common_chat_input(generation_prompt);
         }
         return new llama_rs_chat_parse_state_oaicompat(std::move(syntax));
     } catch (const std::exception &) {
@@ -688,7 +684,7 @@ extern "C" llama_rs_status llama_rs_chat_parse_state_update_oaicompat(
             state->generated_text += text_added;
         }
         auto msg_prv_copy = state->chat_msg;
-        auto new_msg = common_chat_parse(state->generated_text, is_partial, state->syntax);
+        auto new_msg = common_chat_parse(common_chat_input(state->generated_text), is_partial, state->syntax);
         std::vector<common_chat_msg_diff> diffs;
         if (!new_msg.empty()) {
             new_msg.set_tool_call_ids(state->generated_tool_call_ids, []() {
@@ -789,7 +785,7 @@ extern "C" llama_rs_status llama_rs_chat_tools_parse_oaicompat(
     *out_count = 0;
 
     try {
-        auto tools = common_chat_tools_parse_oaicompat(json::parse(tools_json));
+        auto tools = common_chat_tools_parse_oaicompat(common_json::parse(tools_json));
         if (tools.empty()) {
             return LLAMA_RS_STATUS_OK;
         }
@@ -879,7 +875,7 @@ extern "C" llama_rs_status llama_rs_chat_msgs_parse_oaicompat(
     *out_count = 0;
 
     try {
-        auto msgs = common_chat_msgs_parse_oaicompat(json::parse(messages_json));
+        auto msgs = common_chat_msgs_parse_oaicompat(common_json::parse(messages_json));
         if (msgs.empty()) {
             return LLAMA_RS_STATUS_OK;
         }

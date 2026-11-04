@@ -539,6 +539,19 @@ impl LlamaModelParams {
         self
     }
 
+    /// sets `no_host`: the weights skip pinned host memory, so a device can map the token table
+    #[must_use]
+    pub fn with_no_host(mut self, no_host: bool) -> Self {
+        self.params.no_host = no_host;
+        self
+    }
+
+    /// `no_host`
+    #[must_use]
+    pub fn no_host(&self) -> bool {
+        self.params.no_host
+    }
+
     /// sets `use_mmap`
     #[must_use]
     pub fn with_use_mmap(mut self, use_mmap: bool) -> Self {

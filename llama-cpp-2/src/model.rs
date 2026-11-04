@@ -1,7 +1,10 @@
 //! A safe wrapper around `llama_model`.
 use std::ffi::{c_char, CStr, CString};
+use std::num::NonZeroU16;
 use std::os::raw::c_int;
 use std::path::Path;
+use std::ptr::{self, NonNull};
+use std::slice;
 use std::str::Utf8Error;
 
 use crate::context::params::LlamaContextParams;
@@ -17,7 +20,17 @@ use crate::vocab::LlamaVocab;
 use crate::{
     ApplyChatTemplateError, ChatParseError, ChatTemplateError, LlamaContextLoadError,
     LlamaLoraAdapterInitError, LlamaModelLoadError, MetaValError, NewLlamaChatMessageError,
+    StringToTokenError, TokenToStringError,
 };
+
+/// How to determine if we should prepend a bos token to tokens
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AddBos {
+    /// Add the beginning of stream token to the start of the string.
+    Always,
+    /// Do not add the beginning of stream token to the start of the string.
+    Never,
+}
 
 /// Grammar trigger kinds used for lazy grammar sampling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -215,6 +228,37 @@ impl LlamaModel {
     #[must_use]
     pub fn n_vocab(&self) -> i32 {
         self.vocab().n_tokens()
+    }
+
+    /// Convert a string to a token sequence.
+    pub fn str_to_token(
+        &self,
+        str: &str,
+        add_bos: AddBos,
+    ) -> Result<Vec<LlamaToken>, StringToTokenError> {
+        let add_special = match add_bos {
+            AddBos::Always => true,
+            AddBos::Never => false,
+        };
+        Ok(self.vocab().tokenize(str.as_bytes(), add_special, true))
+    }
+
+    /// Check if a token is an end-of-generation token.
+    #[must_use]
+    pub fn is_eog_token(&self, token: LlamaToken) -> bool {
+        self.vocab().is_eog(token)
+    }
+
+    /// Convert a token to a string using an external decoder.
+    pub fn token_to_piece(
+        &self,
+        token: LlamaToken,
+        decoder: &mut encoding_rs::Decoder,
+        special: bool,
+        lstrip: Option<NonZeroU16>,
+    ) -> Result<String, TokenToStringError> {
+        let bytes = self.vocab().token_to_piece(token, special, lstrip);
+        Ok(decode_piece(decoder, &bytes))
     }
 
     /// This returns a `c_int` for maximum compatibility. Most of the time it can be cast to an i32
@@ -804,7 +848,7 @@ impl LlamaModel {
                 };
                 let mut parsed = Vec::with_capacity(tokens.len());
                 for token in tokens {
-                    if token.is_null() {
+                    if (*token).is_null() {
                         return Err(ApplyChatTemplateError::InvalidGrammarTriggerType);
                     }
                     let bytes = unsafe { CStr::from_ptr(*token) }.to_bytes().to_vec();
@@ -825,7 +869,7 @@ impl LlamaModel {
                 };
                 let mut parsed = Vec::with_capacity(stops.len());
                 for stop in stops {
-                    if stop.is_null() {
+                    if (*stop).is_null() {
                         return Err(ApplyChatTemplateError::InvalidGrammarTriggerType);
                     }
                     let bytes = unsafe { CStr::from_ptr(*stop) }.to_bytes().to_vec();
@@ -964,4 +1008,18 @@ impl ChatTemplateResult {
         let state = NonNull::new(state).ok_or(ChatParseError::NullResult)?;
         Ok(ChatParseStateOaicompat { state })
     }
+}
+
+fn decode_piece(decoder: &mut encoding_rs::Decoder, bytes: &[u8]) -> String {
+    let mut output = String::with_capacity(
+        decoder
+            .max_utf8_buffer_length(bytes.len())
+            .expect("token output is too large to decode"),
+    );
+    let (result, read, _) = decoder.decode_to_string(bytes, &mut output, false);
+    assert!(
+        matches!(result, encoding_rs::CoderResult::InputEmpty) && read == bytes.len(),
+        "Decoder did not consume all bytes or ran out of buffer space"
+    );
+    output
 }

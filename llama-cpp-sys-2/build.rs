@@ -1142,6 +1142,7 @@ fn main() {
     if cfg!(feature = "cuda") {
         config.define("GGML_CUDA", "ON");
         config.define("GGML_CUDA_NCCL", "OFF");
+        config.define("GGML_CUDA_FA_QUANTS", "q4_0-q4_0;q8_0-q8_0;q8_0-q4_0;f16-f16;bf16-bf16");
 
         if cfg!(feature = "cuda-no-vmm") {
             config.define("GGML_CUDA_NO_VMM", "ON");

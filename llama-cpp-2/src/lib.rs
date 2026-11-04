@@ -648,3 +648,25 @@ pub enum ChatParseError {
     #[error("ffi error {0}")]
     FfiError(i32),
 }
+
+/// Failed to convert a string to a token sequence.
+#[derive(Debug, thiserror::Error)]
+pub enum StringToTokenError {
+    /// the string contained a null byte and thus could not be converted to a c string.
+    #[error("{0}")]
+    NulError(#[from] NulError),
+    #[error("{0}")]
+    /// Failed to convert a provided integer to a [`c_int`].
+    CIntConversionError(#[from] std::num::TryFromIntError),
+}
+
+/// Failed to convert a token to a string.
+#[derive(Debug, thiserror::Error)]
+pub enum TokenToStringError {
+    /// There was insufficient buffer space to convert the token to a string.
+    #[error("Insufficient Buffer Space {0}")]
+    InsufficientBufferSpace(std::os::raw::c_int),
+    /// The token was not valid utf8.
+    #[error("FromUtf8Error {0}")]
+    FromUtf8Error(#[from] FromUtf8Error),
+}

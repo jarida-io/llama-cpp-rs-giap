@@ -80,6 +80,9 @@ path = "../llama-cpp-sys-2"
 version = "1.7.5"
 optional = true
 
+[dependencies.encoding_rs]
+version = "0.8.35"
+
 [dependencies.thiserror]
 version = "2"
 

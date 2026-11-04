@@ -772,8 +772,8 @@ impl MtmdInputChunks {
     /// This function is NOT thread-safe.
     pub fn eval_chunks(
         &self,
-        mtmd_ctx: &mut MtmdContext,
-        llama_ctx: &mut LlamaContext,
+        mtmd_ctx: &MtmdContext,
+        llama_ctx: &LlamaContext,
         n_past: llama_cpp_sys_2::llama_pos,
         seq_id: llama_cpp_sys_2::llama_seq_id,
         n_batch: i32,
@@ -783,8 +783,8 @@ impl MtmdInputChunks {
 
         let result = unsafe {
             llama_cpp_sys_2::mtmd_helper_eval_chunks(
-                mtmd_ctx.context.as_mut_ptr(),
-                llama_ctx.context.as_mut_ptr(),
+                mtmd_ctx.context.as_ptr().cast_mut(),
+                llama_ctx.context.as_ptr().cast_mut(),
                 self.chunks.as_ptr(),
                 n_past,
                 seq_id,
