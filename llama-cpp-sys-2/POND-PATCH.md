@@ -14,6 +14,7 @@ later bump is the same selection from a newer upstream commit, then the native c
 | `llama-cpp-2/src/openai.rs`, `model.rs`, `wrapper_oai.*` | The OpenAI-compatible chat template and response parser that goose's engine calls | 0.1.146, re-applied |
 | `llama-cpp-2/src/context.rs` | `LlamaContext::synchronize` | this fork |
 | `llama-cpp-2/src/context/params/get_set.rs` | `LlamaContextParams::with_n_outputs_max` | this fork |
+| `llama-cpp-2/src/model.rs` | `new_context_with_ctx_other` defaults `context_params.ctx_type` to `LLAMA_CONTEXT_TYPE_MTP` so speculative draft models allocate `n_embd_state` | this fork |
 | `llama-cpp-2/src/model/params.rs` | `LlamaModelParams::with_no_host` | this fork |
 | `llama.cpp/ggml/CMakeLists.txt`, `llama-cpp-sys-2/build.rs` | Flash Attention compiles the `q8_0-q4_0` asymmetric vector kernel without requiring `GGML_CUDA_FA_ALL_QUANTS` | this fork |
 | `llama.cpp/ggml/src/ggml-alloc.c` | A failed reservation forgets the layout it recorded | this fork; upstream `b11597` does not have it |
