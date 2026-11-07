@@ -884,6 +884,54 @@ impl MtmdInputChunk<'_> {
         unsafe { llama_cpp_sys_2::mtmd_input_chunk_get_n_pos(self.chunk.as_ptr()) }
     }
 
+    /// Evaluate this one chunk into `llama_ctx` at `n_past`: decode its text tokens, or encode its
+    /// image or audio and decode the embeddings. Returns the new `n_past`.
+    ///
+    /// The single-chunk form of [`MtmdInputChunks::eval_chunks`]: a caller that already holds the
+    /// KV for the chunks before this one (a reused prompt prefix) evaluates only the rest.
+    ///
+    /// # Errors
+    ///
+    /// Returns `MtmdEvalError::EvalFailure` if encoding or decoding fails, or if `n_batch` is
+    /// not positive.
+    ///
+    /// This function is NOT thread-safe.
+    pub fn eval(
+        &self,
+        mtmd_ctx: &MtmdContext,
+        llama_ctx: &LlamaContext,
+        n_past: llama_cpp_sys_2::llama_pos,
+        seq_id: llama_cpp_sys_2::llama_seq_id,
+        n_batch: i32,
+        logits_last: bool,
+    ) -> Result<llama_cpp_sys_2::llama_pos, MtmdEvalError> {
+        // The helper asserts on this, which aborts the process rather than returning an error.
+        if n_batch <= 0 {
+            return Err(MtmdEvalError::EvalFailure(-1));
+        }
+        // The helper adds this chunk's positions to it rather than setting it.
+        let mut new_n_past: llama_cpp_sys_2::llama_pos = n_past;
+
+        let result = unsafe {
+            llama_cpp_sys_2::mtmd_helper_eval_chunk_single(
+                mtmd_ctx.context.as_ptr().cast_mut(),
+                llama_ctx.context.as_ptr().cast_mut(),
+                self.chunk.as_ptr(),
+                n_past,
+                seq_id,
+                n_batch,
+                logits_last,
+                &raw mut new_n_past,
+            )
+        };
+
+        if result == 0 {
+            Ok(new_n_past)
+        } else {
+            Err(MtmdEvalError::EvalFailure(result))
+        }
+    }
+
     /// Get chunk ID if available.
     ///
     /// Returns `None` for text chunks, may return an ID for image/audio chunks.
